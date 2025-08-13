@@ -3,7 +3,13 @@ import { useState } from "react";
 
 type ScanResponse = {
   scan_id: string;
+  owner: string;
+  repo: string;
   repo_url: string;
+  created_at: number;
+  files_scanned: number;
+  total_loc: number;
+  limits: { max_bytes: number; max_files: number };
   status: string;
 };
 

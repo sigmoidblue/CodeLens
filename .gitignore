@@ -27,3 +27,6 @@ Thumbs.db
 # Misc
 .env
 
+# CodeLens scan cache
+backend/data/scans/
+backend/data/tmp/
