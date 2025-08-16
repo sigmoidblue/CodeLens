@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Treemap from "../components/Treemap";
+import GraphView, { GraphData } from "../components/GraphView";
+import HealthPanel from "../components/HealthPanel";
 
 type ScanResponse = {
   scan_id: string;
@@ -20,6 +22,18 @@ type TreeNode = {
   children?: TreeNode[];
 };
 
+type HealthData = {
+  full_name: string;
+  html_url: string;
+  description: string | null;
+  stars: number;
+  forks: number;
+  open_issues: number;
+  license: string | null;
+  pushed_at: string | null;
+  default_branch: string | null;
+};
+
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -29,23 +43,35 @@ export default function Home() {
   // tabs
   const [activeTab, setActiveTab] = useState<"Tree" | "Graph" | "Health" | "Tour">("Tree");
 
-  // tree data
+  // Tree
   const [treeLoading, setTreeLoading] = useState<boolean>(false);
   const [treeError, setTreeError] = useState<string>("");
   const [treeData, setTreeData] = useState<TreeNode | null>(null);
+
+  // Graph
+  const [graphLoading, setGraphLoading] = useState<boolean>(false);
+  const [graphError, setGraphError] = useState<string>("");
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
+
+  // Health
+  const [healthLoading, setHealthLoading] = useState<boolean>(false);
+  const [healthError, setHealthError] = useState<string>("");
+  const [healthData, setHealthData] = useState<HealthData | null>(null);
 
   async function handleScan() {
     setError("");
     setResult(null);
     setTreeData(null);
-    setTreeError("");
+    setGraphData(null);
+    setHealthData(null);
+    setTreeError(""); setGraphError(""); setHealthError("");
 
     if (!repoUrl.trim()) {
       setError("Enter a GitHub repo URL");
       return;
     }
-    setLoading(true);
 
+    setLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/scan`, {
         method: "POST",
@@ -55,7 +81,6 @@ export default function Home() {
       if (!res.ok) throw new Error(`API ${res.status}`);
       const data: ScanResponse = await res.json();
       setResult(data);
-      // auto-switch to Tree after a successful scan
       setActiveTab("Tree");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "Failed to reach API";
@@ -66,26 +91,54 @@ export default function Home() {
   }
 
   async function loadTree(scanId: string) {
-    setTreeError("");
+    setTreeError(""); 
     setTreeLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/tree/${scanId}`);
       if (!res.ok) throw new Error(`Tree API ${res.status}`);
       const data: TreeNode = await res.json();
       setTreeData(data);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Failed to load tree";
-      setTreeError(msg);
+    } catch (e: any) {
+      setTreeError(e.message || "Failed to load tree");
     } finally {
       setTreeLoading(false);
     }
   }
 
-  // whenever we have a new scan result AND the Tree tab is active, fetch the tree
-  useEffect(() => {
-    if (activeTab === "Tree" && result?.scan_id) {
-      loadTree(result.scan_id);
+  async function loadGraph(scanId: string) {
+    setGraphError(""); setGraphLoading(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/graph/${scanId}`);
+      if (!res.ok) throw new Error(`Graph API ${res.status}`);
+      const data: GraphData = await res.json();
+      setGraphData(data);
+    } catch (e: any) {
+      setGraphError(e.message || "Failed to load graph");
+    } finally {
+      setGraphLoading(false);
     }
+  }
+
+  async function loadHealth(scanId: string) {
+    setHealthError(""); setHealthLoading(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/health/${scanId}`);
+      if (!res.ok) throw new Error(`Health API ${res.status}`);
+      const data: HealthData = await res.json();
+      setHealthData(data);
+    } catch (e: any) {
+      setHealthError(e.message || "Failed to load health");
+    } finally {
+      setHealthLoading(false);
+    }
+  }
+
+  // reactive loaders when switching tabs
+  useEffect(() => {
+    if (!result?.scan_id) return;
+    if (activeTab === "Tree" && !treeData && !treeLoading) loadTree(result.scan_id);
+    if (activeTab === "Graph" && !graphData && !graphLoading) loadGraph(result.scan_id);
+    if (activeTab === "Health" && !healthData && !healthLoading) loadHealth(result.scan_id);
   }, [activeTab, result?.scan_id]);
 
   const Tab = ({
@@ -110,7 +163,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-5xl space-y-6">
+      <div className="w-full max-w-6xl space-y-6">
         <h1 className="text-3xl font-semibold">CodeLens</h1>
 
         {/* Scan panel */}
@@ -131,7 +184,6 @@ export default function Home() {
           </button>
 
           {error && <p className="text-red-400 text-sm">Error: {error}</p>}
-
           {result && (
             <pre className="text-xs bg-slate-900 border border-slate-800 rounded-xl p-3 overflow-auto">
               {JSON.stringify(result, null, 2)}
@@ -141,29 +193,12 @@ export default function Home() {
 
         {/* Tabs */}
         <div className="flex gap-2">
-          <Tab
-            name="Tree"
-            active={activeTab === "Tree"}
-            onClick={() => setActiveTab("Tree")}
-          />
-          <Tab
-            name="Graph"
-            active={activeTab === "Graph"}
-            onClick={() => setActiveTab("Graph")}
-          />
-          <Tab
-            name="Health"
-            active={activeTab === "Health"}
-            onClick={() => setActiveTab("Health")}
-          />
-          <Tab
-            name="Tour"
-            active={activeTab === "Tour"}
-            onClick={() => setActiveTab("Tour")}
-          />
+          <Tab name="Tree"   active={activeTab === "Tree"}   onClick={() => setActiveTab("Tree")} />
+          <Tab name="Graph"  active={activeTab === "Graph"}  onClick={() => setActiveTab("Graph")} />
+          <Tab name="Health" active={activeTab === "Health"} onClick={() => setActiveTab("Health")} />
+          <Tab name="Tour"   active={activeTab === "Tour"}   onClick={() => setActiveTab("Tour")} />
         </div>
 
-        {/* Tab content */}
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4">
           {activeTab === "Tree" && (
             <>
@@ -175,6 +210,24 @@ export default function Home() {
                   <Treemap data={treeData} />
                 </div>
               )}
+            </>
+          )}
+
+          {activeTab === "Graph" && (
+            <>
+              {!result && <p className="text-slate-400 text-sm">Run a scan to view the graph.</p>}
+              {result && graphLoading && <p className="text-slate-400 text-sm">Loading graph…</p>}
+              {result && graphError && <p className="text-red-400 text-sm">Error: {graphError}</p>}
+              {result && graphData && <GraphView data={graphData} />}
+            </>
+          )}
+
+          {activeTab === "Health" && (
+            <>
+              {!result && <p className="text-slate-400 text-sm">Run a scan to view repo health.</p>}
+              {result && healthLoading && <p className="text-slate-400 text-sm">Loading health…</p>}
+              {result && healthError && <p className="text-red-400 text-sm">Error: {healthError}</p>}
+              {result && healthData && <HealthPanel data={healthData} />}
             </>
           )}
         </div>
