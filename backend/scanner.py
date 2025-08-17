@@ -11,6 +11,7 @@ from typing import Dict, Any, Tuple
 import requests
 from typing import List, Optional
 from pathlib import PurePosixPath
+from collections import defaultdict, Counter
 
 # caps
 MAX_BYTES = 100 * 1024 * 1024  # 100 MB
@@ -306,3 +307,154 @@ def load_graph(scan_id: str) -> Dict[str, Any]:
     if not g:
         raise FileNotFoundError("graph not available for this scan (re-scan with updated code)")
     return g
+
+# for tour panel
+def _flatten_tree(node, prefix=""):
+    """Yield (path, loc, is_dir)."""
+    name = node.get("name", "root")
+    path = f"{prefix}/{name}" if prefix else name
+    kids = node.get("children")
+    if kids:
+        # folder
+        yield (path, node.get("loc", 0), True)
+        for ch in kids:
+            yield from _flatten_tree(ch, path)
+    else:
+        yield (path, node.get("loc", 0), False)
+
+def _ext_of(path: str) -> str:
+    base = path.rsplit("/", 1)[-1]
+    if "." in base:
+        return base.rsplit(".", 1)[-1].lower()
+    return ""
+
+def _basename(path: str) -> str:
+    return path.split("/")[-1]
+
+def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a lightweight architecture tour from saved tree+graph."""
+    summary = scan_data["summary"]
+    tree = scan_data["tree"]
+    graph = scan_data.get("graph", {"nodes": [], "edges": []})
+
+    # flatten files/folders
+    files = [(p, loc) for (p, loc, is_dir) in _flatten_tree(tree) if not is_dir]
+    dirs  = [(p, loc) for (p, loc, is_dir) in _flatten_tree(tree) if is_dir]
+
+    total_loc = summary.get("total_loc", 0)
+    total_files = len(files)
+
+    # language mix (by extension)
+    by_ext_loc = defaultdict(int)
+    for p, loc in files:
+        by_ext_loc[_ext_of(p)] += loc
+    lang_top = sorted(by_ext_loc.items(), key=lambda x: x[1], reverse=True)[:6]
+
+    # biggest files / folders
+    top_files = sorted(files, key=lambda x: x[1], reverse=True)[:8]
+    top_dirs  = sorted(dirs, key=lambda x: x[1], reverse=True)[:6]
+
+    # dependency graph metrics
+    edges = graph.get("edges", [])
+    out_deg = Counter()
+    in_deg  = Counter()
+    for e in edges:
+        out_deg[e["source"]] += 1
+        in_deg[e["target"]]  += 1
+
+    # hubs (imported a lot), spiders (import many)
+    hubs    = [(n, in_deg[n])  for n in set(in_deg)] 
+    spiders = [(n, out_deg[n]) for n in set(out_deg)]
+    hubs    = sorted(hubs, key=lambda x: x[1], reverse=True)[:8]
+    spiders = sorted(spiders, key=lambda x: x[1], reverse=True)[:8]
+
+    # guess probable entrypoints by common names
+    ENTRY_HINTS = {"main.py","app.py","index.py","index.ts","index.tsx","index.js","app.tsx","_app.tsx","server.py"}
+    entries = [p for p,_ in files if _basename(p) in ENTRY_HINTS]
+    if not entries:
+        # fallback: top spider(s)
+        entries = [n for n,_ in spiders[:3]]
+
+    # risks
+    risks = []
+    if top_files and top_files[0][1] > max(300, 0.15 * total_loc):
+        risks.append(f"Large single file **{top_files[0][0]}** with {top_files[0][1]} LOC.")
+    if edges and (len(hubs) and hubs[0][1] >= 10):
+        risks.append(f"High fan-in on **{hubs[0][0]}** ({hubs[0][1]} importers) — consider splitting.")
+    if total_files > 1000:
+        risks.append(f"Big repo: {total_files} files — consider focusing scans or adding CODEOWNERS.")
+
+    # quick wins
+    quick_wins = []
+    if any(_ext_of(p) in {"js","jsx"} for p,_ in files):
+        quick_wins.append("Enable TypeScript in JS areas for safer refactors.")
+    if any(_ext_of(p) in {"ts","tsx"} for p,_ in files):
+        quick_wins.append("Turn on `noUncheckedIndexedAccess` for better TS safety.")
+    if any(_ext_of(p) == "py" for p,_ in files):
+        quick_wins.append("Add `ruff` or `flake8` + `black` to keep Python tidy.")
+    if not quick_wins:
+        quick_wins.append("Add CI lint/format to keep contributions consistent.")
+
+    def fmt_pairs(pairs, limit=6):
+        return [f"{k or 'other'} — {v} LOC" for k,v in pairs[:limit]]
+
+    def fmt_list(items, limit=8):
+        return [f"{p} — {loc} LOC" for p,loc in items[:limit]]
+
+    tour = {
+        "header": {
+            "owner": summary["owner"],
+            "repo": summary["repo"],
+            "repo_url": summary["repo_url"],
+            "files_scanned": summary["files_scanned"],
+            "total_loc": total_loc,
+        },
+        "sections": [
+            {
+                "title": "Overview",
+                "bullets": [
+                    f"**{summary['owner']}/{summary['repo']}** scanned.",
+                    f"Files scanned: **{summary['files_scanned']}**",
+                    f"Total LOC: **{total_loc}**",
+                ],
+            },
+            {
+                "title": "Language Mix (by LOC)",
+                "bullets": fmt_pairs(lang_top),
+            },
+            {
+                "title": "Likely Entrypoints",
+                "bullets": entries or ["No obvious entry files detected."],
+            },
+            {
+                "title": "Heaviest Folders",
+                "bullets": fmt_list(top_dirs),
+            },
+            {
+                "title": "Biggest Files",
+                "bullets": fmt_list(top_files),
+            },
+            {
+                "title": "Dependency Hubs (imported by many)",
+                "bullets": [f"{n} — {deg} importers" for n,deg in hubs],
+            },
+            {
+                "title": "Spider Files (import many)",
+                "bullets": [f"{n} — {deg} imports" for n,deg in spiders],
+            },
+            {
+                "title": "Potential Risks",
+                "bullets": risks or ["None obvious from static scan."],
+            },
+            {
+                "title": "Quick Wins",
+                "bullets": quick_wins,
+            },
+        ],
+        "note": graph.get("note"),
+    }
+    return tour
+
+def load_tour(scan_id: str) -> Dict[str, Any]:
+    data = load_scan(scan_id)
+    return build_tour_from_scan(data)

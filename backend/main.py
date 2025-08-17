@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from scanner import scan_repo, load_scan, load_graph
+from scanner import scan_repo, load_scan, load_graph, load_tour
 import requests
 
 class ScanRequest(BaseModel):
@@ -73,6 +73,15 @@ def repo_health(scan_id: str):
             "pushed_at": j.get("pushed_at"),
             "default_branch": j.get("default_branch"),
         }
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="scan not found")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/tour/{scan_id}")
+def get_tour(scan_id: str):
+    try:
+        return load_tour(scan_id)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="scan not found")
     except Exception as e:
