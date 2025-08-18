@@ -384,17 +384,6 @@ def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
     if total_files > 1000:
         risks.append(f"Big repo: {total_files} files — consider focusing scans or adding CODEOWNERS.")
 
-    # quick wins
-    quick_wins = []
-    if any(_ext_of(p) in {"js","jsx"} for p,_ in files):
-        quick_wins.append("Enable TypeScript in JS areas for safer refactors.")
-    if any(_ext_of(p) in {"ts","tsx"} for p,_ in files):
-        quick_wins.append("Turn on `noUncheckedIndexedAccess` for better TS safety.")
-    if any(_ext_of(p) == "py" for p,_ in files):
-        quick_wins.append("Add `ruff` or `flake8` + `black` to keep Python tidy.")
-    if not quick_wins:
-        quick_wins.append("Add CI lint/format to keep contributions consistent.")
-
     def fmt_pairs(pairs, limit=6):
         return [f"{k or 'other'} — {v} LOC" for k,v in pairs[:limit]]
 
@@ -445,10 +434,6 @@ def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "title": "Potential Risks",
                 "bullets": risks or ["None obvious from static scan."],
-            },
-            {
-                "title": "Quick Wins",
-                "bullets": quick_wins,
             },
         ],
         "note": graph.get("note"),

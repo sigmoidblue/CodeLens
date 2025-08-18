@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import Treemap from "../components/Treemap";
 import GraphView, { GraphData } from "../components/GraphView";
 import HealthPanel from "../components/HealthPanel";
+import TourPanel from "../components/TourPanel";
 
 type ScanResponse = {
   scan_id: string;
@@ -34,6 +35,18 @@ type HealthData = {
   default_branch: string | null;
 };
 
+type TourData = {
+  header: {
+    owner: string;
+    repo: string;
+    repo_url: string;
+    files_scanned: number;
+    total_loc: number;
+  };
+  sections: { title: string; bullets: string[] }[];
+  note?: string;
+};
+
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
@@ -58,13 +71,19 @@ export default function Home() {
   const [healthError, setHealthError] = useState<string>("");
   const [healthData, setHealthData] = useState<HealthData | null>(null);
 
+  // Tour
+  const [tourLoading, setTourLoading] = useState<boolean>(false);
+  const [tourError, setTourError] = useState<string>("");
+  const [tourData, setTourData] = useState<TourData | null>(null);
+
   async function handleScan() {
     setError("");
     setResult(null);
     setTreeData(null);
     setGraphData(null);
     setHealthData(null);
-    setTreeError(""); setGraphError(""); setHealthError("");
+    setTourData(null);
+    setTreeError(""); setGraphError(""); setHealthError(""); setTourError("");
 
     if (!repoUrl.trim()) {
       setError("Enter a GitHub repo URL");
@@ -133,12 +152,27 @@ export default function Home() {
     }
   }
 
+  async function loadTour(scanId: string) {
+    setTourError(""); setTourLoading(true);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/tour/${scanId}`);
+      if (!res.ok) throw new Error(`Tour API ${res.status}`);
+      const data: TourData = await res.json();
+      setTourData(data);
+    } catch (e: any) {
+      setTourError(e.message || "Failed to load tour");
+    } finally {
+      setTourLoading(false);
+    }
+  }
+
   // reactive loaders when switching tabs
   useEffect(() => {
     if (!result?.scan_id) return;
     if (activeTab === "Tree" && !treeData && !treeLoading) loadTree(result.scan_id);
     if (activeTab === "Graph" && !graphData && !graphLoading) loadGraph(result.scan_id);
     if (activeTab === "Health" && !healthData && !healthLoading) loadHealth(result.scan_id);
+    if (activeTab === "Tour" && !tourData && !tourLoading) loadTour(result.scan_id); 
   }, [activeTab, result?.scan_id]);
 
   const Tab = ({
@@ -228,6 +262,15 @@ export default function Home() {
               {result && healthLoading && <p className="text-slate-400 text-sm">Loading health…</p>}
               {result && healthError && <p className="text-red-400 text-sm">Error: {healthError}</p>}
               {result && healthData && <HealthPanel data={healthData} />}
+            </>
+          )}
+
+          {activeTab === "Tour" && (
+            <>
+              {!result && <p className="text-slate-400 text-sm">Run a scan to view the tour.</p>}
+              {result && tourLoading && <p className="text-slate-400 text-sm">Generating tour…</p>}
+              {result && tourError && <p className="text-red-400 text-sm">Error: {tourError}</p>}
+              {result && tourData && <TourPanel data={tourData} />}
             </>
           )}
         </div>
