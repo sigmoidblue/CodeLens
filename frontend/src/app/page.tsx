@@ -199,7 +199,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
       <div className="w-full max-w-6xl space-y-6">
-        <h1 className="text-3xl font-semibold">CodeLens</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">CodeLens</h1>
 
         {/* Scan panel */}
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-4">
@@ -255,7 +255,7 @@ export default function Home() {
               </div>
 
               {showRaw && (
-                <pre className="mt-3 text-xs bg-slate-950/60 border border-slate-800 rounded-lg p-3 overflow-auto">
+                <pre className="mt-3 font-mono text-xs bg-slate-900 border border-slate-800 rounded-lg p-3 overflow-auto">
                   {JSON.stringify(result, null, 2)}
                 </pre>
               )}
