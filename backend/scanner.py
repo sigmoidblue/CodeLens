@@ -402,9 +402,9 @@ def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "title": "Overview",
                 "bullets": [
-                    f"**{summary['owner']}/{summary['repo']}** scanned.",
-                    f"Files scanned: **{summary['files_scanned']}**",
-                    f"Total LOC: **{total_loc}**",
+                    f"{summary['owner']}/{summary['repo']} scanned.",
+                    f"Files scanned: {summary['files_scanned']}",
+                    f"Total LOC: {total_loc}",
                 ],
             },
             {
@@ -432,7 +432,7 @@ def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
                 "bullets": [f"{n} — {deg} imports" for n,deg in spiders],
             },
             {
-                "title": "Potential Risks",
+                "title": "Potential Risks (Large/complex or fragile files)",
                 "bullets": risks or ["None obvious from static scan."],
             },
         ],

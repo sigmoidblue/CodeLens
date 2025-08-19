@@ -52,6 +52,7 @@ export default function Home() {
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<ScanResponse | null>(null);
   const [error, setError] = useState<string>("");
+  const [showRaw, setShowRaw] = useState(false);
 
   // tabs
   const [activeTab, setActiveTab] = useState<"Tree" | "Graph" | "Health" | "Tour">("Tree");
@@ -110,7 +111,7 @@ export default function Home() {
   }
 
   async function loadTree(scanId: string) {
-    setTreeError(""); 
+    setTreeError("");
     setTreeLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE}/tree/${scanId}`);
@@ -172,7 +173,7 @@ export default function Home() {
     if (activeTab === "Tree" && !treeData && !treeLoading) loadTree(result.scan_id);
     if (activeTab === "Graph" && !graphData && !graphLoading) loadGraph(result.scan_id);
     if (activeTab === "Health" && !healthData && !healthLoading) loadHealth(result.scan_id);
-    if (activeTab === "Tour" && !tourData && !tourLoading) loadTour(result.scan_id); 
+    if (activeTab === "Tour" && !tourData && !tourLoading) loadTour(result.scan_id);
   }, [activeTab, result?.scan_id]);
 
   const Tab = ({
@@ -219,18 +220,55 @@ export default function Home() {
 
           {error && <p className="text-red-400 text-sm">Error: {error}</p>}
           {result && (
-            <pre className="text-xs bg-slate-900 border border-slate-800 rounded-xl p-3 overflow-auto">
-              {JSON.stringify(result, null, 2)}
-            </pre>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={result.repo_url}
+                  target="_blank"
+                  className="text-blue-300 hover:text-blue-200 underline underline-offset-2"
+                >
+                  {result.owner}/{result.repo}
+                </a>
+
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full border border-slate-700 text-slate-300">
+                  {result.files_scanned} files
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full border border-slate-700 text-slate-300">
+                  {result.total_loc} LOC
+                </span>
+
+                <div className="ml-auto flex items-center gap-2">
+                  {/* <button
+                    onClick={() => { navigator.clipboard.writeText(result.scan_id); }}
+                    className="text-xs px-2 py-1 rounded border border-slate-700 hover:border-slate-500"
+                    title="Copy scan id"
+                  >
+                    Copy Scan ID
+                  </button> */}
+                  <button
+                    onClick={() => setShowRaw(v => !v)}
+                    className="text-xs px-2 py-1 rounded border border-slate-700 hover:border-slate-500"
+                  >
+                    {showRaw ? "Hide raw" : "View raw"}
+                  </button>
+                </div>
+              </div>
+
+              {showRaw && (
+                <pre className="mt-3 text-xs bg-slate-950/60 border border-slate-800 rounded-lg p-3 overflow-auto">
+                  {JSON.stringify(result, null, 2)}
+                </pre>
+              )}
+            </div>
           )}
         </div>
 
         {/* Tabs */}
         <div className="flex gap-2">
-          <Tab name="Tree"   active={activeTab === "Tree"}   onClick={() => setActiveTab("Tree")} />
-          <Tab name="Graph"  active={activeTab === "Graph"}  onClick={() => setActiveTab("Graph")} />
+          <Tab name="Tree" active={activeTab === "Tree"} onClick={() => setActiveTab("Tree")} />
+          <Tab name="Graph" active={activeTab === "Graph"} onClick={() => setActiveTab("Graph")} />
           <Tab name="Health" active={activeTab === "Health"} onClick={() => setActiveTab("Health")} />
-          <Tab name="Tour"   active={activeTab === "Tour"}   onClick={() => setActiveTab("Tour")} />
+          <Tab name="Tour" active={activeTab === "Tour"} onClick={() => setActiveTab("Tour")} />
         </div>
 
         <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4">
