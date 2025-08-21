@@ -188,8 +188,10 @@ export default function Home() {
     <button
       onClick={onClick}
       className={[
-        "px-3 py-1 rounded-full border text-sm",
-        active ? "border-blue-500 text-blue-300" : "border-slate-800 text-slate-300 opacity-80",
+        "px-3 py-1 rounded-full border text-sm transition-colors",
+        active
+          ? "border-cyan-500 text-cyan-300 shadow-[0_0_0.5rem_#22d3ee66]"
+          : "border-slate-800 text-slate-300/80 hover:text-slate-200"
       ].join(" ")}
     >
       {name}
@@ -212,7 +214,8 @@ export default function Home() {
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="e.g., https://github.com/vercel/next.js"
-            className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 outline-none 
+                       focus:ring-2 focus:ring-cyan-400/60"
           />
           <button
             onClick={handleScan}
@@ -226,7 +229,6 @@ export default function Home() {
           >
             {loading ? "Scanning..." : "Scan"}
           </button>
-
 
           {error && <p className="text-red-400 text-sm">Error: {error}</p>}
           {result && (
