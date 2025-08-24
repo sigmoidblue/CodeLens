@@ -24,6 +24,28 @@ TEXT_EXTS = {
     ".sh",".rb",".php",".cs"
 }
 
+# ignore lists for big repos
+SKIP_DIRS = (
+    "examples/", "example/", "test/", "tests/", "__tests__/", "testing/",
+    "fixtures/", "benchmarks/", "perf/", "docs/", "documentation/",
+    ".github/", ".git/", "scripts/generated/", "site/", "website/",
+    "public/", "dist/", "build/", ".next/", "out/",
+    "node_modules/", "vendor/",
+)
+
+SKIP_EXTS = (
+    # images
+    ".png",".jpg",".jpeg",".gif",".webp",".bmp",".tiff",".svg",
+    # audio/video
+    ".mp3",".wav",".ogg",".mp4",".mov",".webm",".avi",".mkv",
+    # fonts
+    ".woff",".woff2",".ttf",".eot",".otf",
+    # archives/bundles
+    ".zip",".tar",".gz",".bz2",".7z",".rar",
+    # large data/binary
+    ".pdf",".ico",".psd",".sketch",".blend",".wasm",
+)
+
 # language/parse hints for the dependency graph
 JS_TS_EXTS = {".js",".jsx",".ts",".tsx",".mjs",".cjs",".mts",".cts",".d.ts",".json"}
 PY_EXTS = {".py"}
@@ -196,7 +218,7 @@ def scan_repo(repo_url: str) -> Dict[str, Any]:
     root_tree: Dict[str, Any] = {"name": "root", "children": {}}
 
     # accumulators for dependency graph
-    all_files: set[str] = set()           # all repo paths (posix)
+    all_files: set[str] = set()           # all kept repo paths (posix)
     file_bytes: Dict[str, bytes] = {}     # keep parsable sources in memory for graph
     edges: List[Tuple[str, str]] = []     # (source -> target)
 
@@ -205,33 +227,45 @@ def scan_repo(repo_url: str) -> Dict[str, Any]:
             for zi in zf.infolist():
                 if zi.is_dir():
                     continue
-                files_scanned += 1
-                if files_scanned > MAX_FILES:
-                    raise ValueError(f"Repository exceeds {MAX_FILES} files limit")
 
-                # extract into memory, no writing to disk
+                # compute normalized relative path (without extracting)
+                arcname = zi.filename
+                parts = arcname.split("/", 1)
+                rel = parts[1] if len(parts) > 1 else parts[0]
+                rel = _norm_posix(rel)
+
+                # directory skip (prefix check, ensure trailing slash patterns)
+                if any(rel.startswith(d) for d in SKIP_DIRS):
+                    continue
+                # extension skip
+                ext = os.path.splitext(rel)[1].lower()
+                if ext in SKIP_EXTS:
+                    continue
+
+                # read file content only if not skipped
                 with zf.open(zi) as f:
                     head = f.read(4096)
                     rest = f.read()
                     content = head + rest
 
-                arcname = zi.filename
-                parts = arcname.split("/", 1)
-                rel = parts[1] if len(parts) > 1 else parts[0]
-                rel = _norm_posix(rel)  # normalize to posix for graph
-
-                # collect file set for resolution
-                all_files.add(rel)
-
+                # textual filter
                 if not looks_textual(rel, head):
                     continue
 
+                # count only included/textual files
+                files_scanned += 1
+                if files_scanned > MAX_FILES:
+                    raise ValueError(f"Repository exceeds {MAX_FILES} files limit")
+
+                # LOC + tree
                 loc = count_loc_from_bytes(content)
                 total_loc += loc
                 add_to_tree(root_tree, rel.split("/"), loc)
 
+                # record kept file for graph
+                all_files.add(rel)
+
                 # retain code files for graph parsing (size-guard: 2MB/file)
-                ext = os.path.splitext(rel)[1].lower()
                 if (ext in JS_TS_EXTS or ext in PY_EXTS) and len(content) <= 2_000_000:
                     file_bytes[rel] = content
 
@@ -378,9 +412,9 @@ def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
     # risks
     risks = []
     if top_files and top_files[0][1] > max(300, 0.15 * total_loc):
-        risks.append(f"Large single file **{top_files[0][0]}** with {top_files[0][1]} LOC.")
+        risks.append(f"Large single file {top_files[0][0]} with {top_files[0][1]} LOC.")
     if edges and (len(hubs) and hubs[0][1] >= 10):
-        risks.append(f"High fan-in on **{hubs[0][0]}** ({hubs[0][1]} importers) — consider splitting.")
+        risks.append(f"High fan-in on {hubs[0][0]} ({hubs[0][1]} importers) — consider splitting.")
     if total_files > 1000:
         risks.append(f"Big repo: {total_files} files — consider focusing scans or adding CODEOWNERS.")
 
@@ -432,7 +466,7 @@ def build_tour_from_scan(scan_data: Dict[str, Any]) -> Dict[str, Any]:
                 "bullets": [f"{n} — {deg} imports" for n,deg in spiders],
             },
             {
-                "title": "Potential Risks (Large/complex or fragile files)",
+                "title": "Potential Risks",
                 "bullets": risks or ["None obvious from static scan."],
             },
         ],
