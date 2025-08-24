@@ -98,7 +98,16 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repo_url: repoUrl.trim() }),
       });
-      if (!res.ok) throw new Error(`API ${res.status}`);
+
+      if (!res.ok) {
+        let msg = `API ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body?.detail) msg = body.detail;
+        } catch { }
+        throw new Error(msg);
+      }
+
       const data: ScanResponse = await res.json();
       setResult(data);
       setActiveTab("Tree");
