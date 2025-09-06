@@ -222,7 +222,7 @@ export default function Home() {
           <input
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
-            placeholder="e.g., https://github.com/vercel/next.js"
+            placeholder="e.g., https://github.com/sindresorhus/slugify"
             className="w-full rounded-xl bg-slate-900 border border-slate-800 px-3 py-2 outline-none 
                        focus:ring-2 focus:ring-cyan-400/60"
           />
