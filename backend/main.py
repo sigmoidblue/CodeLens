@@ -13,7 +13,7 @@ app = FastAPI(title="CodeLens API", version="0.2.0")
 
 origins = [
     "http://localhost:3000",           # local frontend
-    "https://codelens.vercel.app",     # deployed frontend
+    "https://codelens-six.vercel.app/",     # deployed frontend
 ]
 app.add_middleware(
     CORSMiddleware,
