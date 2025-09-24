@@ -1,8 +1,10 @@
+import os
+import requests
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from scanner import scan_repo, load_scan, load_graph, load_tour
-import requests
+import uvicorn
 
 class ScanRequest(BaseModel):
     repo_url: str
@@ -10,12 +12,12 @@ class ScanRequest(BaseModel):
 app = FastAPI(title="CodeLens API", version="0.2.0")
 
 origins = [
-    "http://localhost:3000",
-    # "https://codelens.vercel.app",  # enable when deployed
+    "http://localhost:3000",           # local frontend
+    "https://codelens.vercel.app",     # deployed frontend
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins,  # can temporarily use ["*"] during testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -86,3 +88,8 @@ def get_tour(scan_id: str):
         raise HTTPException(status_code=404, detail="scan not found")
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# ---- Deployment entrypoint ----
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))  # Render injects PORT
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
